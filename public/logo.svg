@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 430" role="img" aria-label="Dominó El Patio">
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE56A"/>
+      <stop offset="100%" stop-color="#F5A31A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(410 168)">
+    <text text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-size="118" font-weight="900" fill="#12C5FF" stroke="#12C5FF" stroke-width="28" stroke-linejoin="round">DOMINÓ</text>
+    <text text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-size="118" font-weight="900" fill="#111" stroke="#111" stroke-width="16" stroke-linejoin="round">DOMINÓ</text>
+    <text text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-size="118" font-weight="900" fill="url(#face)" stroke="#7A1420" stroke-width="6" stroke-linejoin="round">DOMINÓ</text>
+  </g>
+  <g transform="translate(410 318)">
+    <rect x="-250" y="-52" rx="46" ry="46" width="500" height="96" fill="#12C5FF"/>
+    <rect x="-238" y="-42" rx="40" ry="40" width="476" height="78" fill="#111"/>
+    <rect x="-230" y="-36" rx="36" ry="36" width="460" height="66" fill="#D21E32"/>
+    <text text-anchor="middle" y="18" font-family="Arial Black, Impact, sans-serif" font-size="48" font-weight="800" fill="#fff">EL PATIO</text>
+  </g>
+</svg>

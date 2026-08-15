@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dominó El Patio
 
-## Getting Started
+App web de **apuntes de dominó** para un patio o sala. Una sola mesa a la vez, todos se enfrentan, y al final se juega pre-eliminatoria y final de forma justa.
 
-First, run the development server:
+Inspirada en anotadores como [ANOTE](https://anotedomino.com/) y [DominApp](https://chivopost.itch.io/dominapp), pero pensada para un torneo en vivo con código de sala.
+
+## Cómo funciona el torneo
+
+1. **Crear el torneo**  
+   El dueño abre una sala (código de 4 letras) y comparte el código. Quien entra escribe su nombre y, si ya hay parejas, **elige su grupo**.
+
+2. **Rifa de equipos**  
+   Jugadores A (más experiencia) + jugadores B (menos experiencia). Cada pareja sale 1A + 1B al azar. Si el dueño ya trae las parejas, las anota directo.
+
+3. **Todos contra todos, una mesa a la vez**  
+   Con 3 parejas, por ejemplo:
+   - Mesa 1: B vs C (A descansa)
+   - Mesa 2: A vs C (B descansa)
+   - Mesa 3: A vs B (C descansa)
+
+   Cada grupo anota **sus** puntos en el teléfono. El dueño ve ambos marcadores en vivo.
+
+4. **Pre-eliminatoria justa**
+   - 3 equipos: el 1° espera en la final; 2° vs 3° en pre-elim.
+   - 4 o más: clasifican los 4 primeros. Pre-elim **1° vs 4°** y **2° vs 3°**.
+
+5. **Final**  
+   Los ganadores de la pre-elim (o el 1° de la liguilla + el ganador de la pre-elim, si hay 3) juegan el título.
+
+El ranking de la liguilla ordena por victorias, luego diferencia de puntos, luego puntos a favor y, si hace falta, el cara a cara.
+
+## Arranque local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000). En local las salas se guardan en `.data/rooms.json` (no hace falta base de datos).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Subir a Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+En Vercel el disco no se comparte entre visitas: hay que conectar un almacén.
 
-## Learn More
+### Opción recomendada: Neon Postgres
 
-To learn more about Next.js, take a look at the following resources:
+1. En el proyecto de Vercel: **Integrations → Neon**.
+2. Crea la base. Vercel deja `DATABASE_URL` sola.
+3. Redeploy.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+La app crea la tabla `rooms` en el primer request.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Alternativa: Upstash Redis
 
-## Deploy on Vercel
+Define:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Variables
+
+Ver `.env.example`. No subas `.env` al repo.
+
+## Logo
+
+El archivo `public/logo.svg` es la marca Dominó El Patio. Si quieres usar el PNG original, colócalo en `public/logo.png` y cambia el `src` del logo en `components/DominoApp.tsx`.
