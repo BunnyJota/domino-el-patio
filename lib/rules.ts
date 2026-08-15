@@ -66,8 +66,8 @@ export const RULES_TEXT = {
 export const STAGE_LABEL: Record<string, string> = {
   roster: "Inscripción",
   teams_drawn: "Rifa lista",
-  classification: "Todos contra todos",
-  pre_elim: "Pre-eliminatoria",
+  classification: "Ronda 1",
+  pre_elim: "Repechaje",
   final: "Final",
   finished: "Campeón",
 };

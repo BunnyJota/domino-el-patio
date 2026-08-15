@@ -5,8 +5,19 @@ import type { Room } from "./types";
 
 export type StorageKind = "neon" | "upstash" | "file" | "missing";
 
+function env(name: string): string | null {
+  const value = process.env[name];
+  return value && value.trim() ? value : null;
+}
+
 function postgresUrl(): string | null {
-  return process.env.DATABASE_URL || process.env.POSTGRES_URL || null;
+  return (
+    env("DATABASE_URL") ||
+    env("POSTGRES_URL") ||
+    env("DATABASE_URL_DATABASE_URL") ||
+    env("DATABASE_URL_POSTGRES_URL") ||
+    null
+  );
 }
 
 export function storageKind(): StorageKind {

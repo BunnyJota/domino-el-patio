@@ -138,51 +138,154 @@ export function assignMembersToTeams(room: Room): void {
   }
 }
 
-/** Circle method, then flatten so the patio plays one mesa at a time. */
+/** First mesa only. The winner sits for the final; everyone else fights for the other seat. */
 export function buildClassificationMatches(teams: Team[]): Match[] {
   if (teams.length < 2) return [];
-  const hasBye = teams.length % 2 === 1;
-  let arr: Array<Team | null> = hasBye ? [...teams, null] : [...teams];
-  const n = arr.length;
-  const roundCount = n - 1;
-  const half = n / 2;
-  const matches: Match[] = [];
-  let order = 1;
+  const shuffled = shuffle(teams);
+  const rest = shuffled[2] ?? null;
+  return [
+    makeMatch({
+      stage: "classification",
+      order: 1,
+      round: 1,
+      teamAId: shuffled[0].id,
+      teamBId: shuffled[1].id,
+      restTeamId: rest?.id ?? null,
+    }),
+  ];
+}
 
-  for (let r = 0; r < roundCount; r += 1) {
-    let restTeam: Team | null = null;
-    const pairs: Array<[Team, Team]> = [];
-    for (let i = 0; i < half; i += 1) {
-      const a = arr[i];
-      const b = arr[n - 1 - i];
-      if (!a) {
-        restTeam = b;
-        continue;
-      }
-      if (!b) {
-        restTeam = a;
-        continue;
-      }
-      pairs.push([a, b]);
-    }
-    for (const [a, b] of pairs) {
-      matches.push(
-        makeMatch({
-          stage: "classification",
-          order: order++,
-          round: r + 1,
-          teamAId: a.id,
-          teamBId: b.id,
-          restTeamId: restTeam?.id ?? null,
-        }),
-      );
-    }
-    const fixed = arr[0];
-    const rest = arr.slice(1);
-    const moved = rest.pop();
-    arr = [fixed, moved ?? null, ...rest];
+export function sittingFinalistId(room: Room): string | null {
+  const first = room.matches.find(
+    (m) => m.stage === "classification" && m.order === 1 && m.status === "done",
+  );
+  return first?.winnerId ?? null;
+}
+
+export function waitingForFinal(room: Room, teamId: string | null): boolean {
+  if (!teamId) return false;
+  if (room.stage === "final" || room.stage === "finished") return false;
+  return sittingFinalistId(room) === teamId;
+}
+
+function fightingTeams(room: Room): Team[] {
+  const sit = sittingFinalistId(room);
+  return room.teams.filter((t) => t.id !== sit && !t.eliminatedIn);
+}
+
+function playedTeamIds(room: Room): Set<string> {
+  const ids = new Set<string>();
+  for (const m of room.matches) {
+    if (m.status !== "done") continue;
+    if (m.teamAId) ids.add(m.teamAId);
+    if (m.teamBId) ids.add(m.teamBId);
   }
-  return matches;
+  return ids;
+}
+
+function nextClassificationOrder(room: Room): number {
+  return (
+    room.matches
+      .filter((m) => m.stage === "classification")
+      .reduce((max, m) => Math.max(max, m.order), 0) + 1
+  );
+}
+
+function seedDirectFinal(room: Room, aId: string, bId: string | null): void {
+  const existing = room.matches.find((m) => m.stage === "final");
+  if (existing) {
+    existing.teamAId = aId;
+    existing.teamBId = bId;
+    if (aId && bId) existing.status = "ready";
+    room.stage = "final";
+    room.activeMatchId = existing.id;
+    addLog(room, "Se arma la Final.");
+    return;
+  }
+  const final = makeMatch({
+    stage: "final",
+    order: 1,
+    teamAId: aId,
+    teamBId: bId,
+    status: aId && bId ? "ready" : "pending",
+  });
+  room.matches.push(final);
+  room.stage = "final";
+  room.activeMatchId = final.id;
+  addLog(room, "Se arma la Final.");
+}
+
+function seedRepechage(room: Room, aId: string, bId: string, sitterId: string): void {
+  const pre = makeMatch({
+    stage: "pre_elim",
+    order: 1,
+    teamAId: aId,
+    teamBId: bId,
+  });
+  const final = makeMatch({
+    stage: "final",
+    order: 1,
+    teamAId: sitterId,
+    teamBId: null,
+    status: "pending",
+  });
+  room.matches.push(pre, final);
+  room.stage = "pre_elim";
+  room.activeMatchId = pre.id;
+  const sitter = teamById(room, sitterId);
+  addLog(
+    room,
+    `Repechaje de perdedores: ${labelMatch(room, pre)}. ${sitter ? sitter.name : "El ganador"} espera en la Final.`,
+  );
+}
+
+function continueAfterClassification(room: Room, finished: Match): void {
+  if (finished.order > 1) {
+    const loserId = finished.winnerId === finished.teamAId ? finished.teamBId : finished.teamAId;
+    const loser = teamById(room, loserId);
+    if (loser) loser.eliminatedIn = "classification";
+  }
+
+  const sitter = sittingFinalistId(room);
+  if (!sitter) return;
+
+  const fighters = fightingTeams(room);
+  if (fighters.length <= 1) {
+    seedDirectFinal(room, sitter, fighters[0]?.id ?? null);
+    return;
+  }
+  if (fighters.length === 2) {
+    seedRepechage(room, fighters[0].id, fighters[1].id, sitter);
+    return;
+  }
+
+  const played = playedTeamIds(room);
+  const fresh = shuffle(fighters.filter((t) => !played.has(t.id)));
+  const used = shuffle(fighters.filter((t) => played.has(t.id)));
+  let a: Team;
+  let b: Team;
+  if (fresh.length >= 2) {
+    a = fresh[0];
+    b = fresh[1];
+  } else if (fresh.length === 1 && used.length >= 1) {
+    a = fresh[0];
+    b = used[0];
+  } else {
+    a = used[0];
+    b = used[1];
+  }
+  const next = makeMatch({
+    stage: "classification",
+    order: nextClassificationOrder(room),
+    round: finished.round + 1,
+    teamAId: a.id,
+    teamBId: b.id,
+    restTeamId: sitter,
+  });
+  room.matches.push(next);
+  room.activeMatchId = next.id;
+  const sitName = teamById(room, sitter)?.name || "El ganador";
+  addLog(room, `Siguiente mesa: ${labelMatch(room, next)}. ${sitName} espera en la Final.`);
 }
 
 export function classificationStandings(room: Room): Standing[] {
@@ -208,10 +311,12 @@ export function classificationStandings(room: Room): Standing[] {
     const isOut = Boolean(team.eliminatedIn) && !isChampion;
     let label = "En juego";
     if (isChampion) label = "Campeón";
-    else if (team.eliminatedIn === "classification") label = "Fuera en liguilla";
-    else if (team.eliminatedIn === "pre_elim") label = "Fuera en pre-elim";
+    else if (team.eliminatedIn === "classification") label = "Fuera en ronda 1";
+    else if (team.eliminatedIn === "pre_elim") label = "Fuera en repechaje";
     else if (team.eliminatedIn === "final") label = "Subcampeón";
-    else if (room.stage === "pre_elim") label = "Pre-eliminatoria";
+    else if (sittingFinalistId(room) === team.id && room.stage !== "final" && room.stage !== "finished") {
+      label = "Espera en la Final";
+    } else if (room.stage === "pre_elim") label = "Repechaje";
     else if (room.stage === "final") label = "En la final";
     return {
       team,
@@ -229,6 +334,9 @@ export function classificationStandings(room: Room): Standing[] {
 
   rows.sort((a, b) => {
     if (a.isChampion !== b.isChampion) return a.isChampion ? -1 : 1;
+    const sit = sittingFinalistId(room);
+    if (a.team.id === sit && b.team.id !== sit) return -1;
+    if (b.team.id === sit && a.team.id !== sit) return 1;
     if (a.wins !== b.wins) return b.wins - a.wins;
     if (a.diff !== b.diff) return b.diff - a.diff;
     if (a.pf !== b.pf) return b.pf - a.pf;
@@ -284,83 +392,7 @@ export function startTournament(room: Room): void {
   room.activeMatchId = queue[0]?.id ?? null;
   addLog(
     room,
-    `Liguilla sorteada: ${queue.length} partidas, una mesa a la vez. Todos se enfrentan.`,
-  );
-}
-
-function seedPlayoffs(room: Room): void {
-  const ranked = classificationStandings(room).map((s) => s.team);
-  if (ranked.length < 2) {
-    throw new Error("No hay suficientes equipos para la pre-eliminatoria.");
-  }
-
-  if (ranked.length === 2) {
-    const final = makeMatch({
-      stage: "final",
-      order: 1,
-      teamAId: ranked[0].id,
-      teamBId: ranked[1].id,
-    });
-    room.matches.push(final);
-    room.stage = "final";
-    room.activeMatchId = final.id;
-    addLog(room, "Liguilla cerrada. Se juega la Final.");
-    return;
-  }
-
-  if (ranked.length === 3) {
-    const pre = makeMatch({
-      stage: "pre_elim",
-      order: 1,
-      teamAId: ranked[1].id,
-      teamBId: ranked[2].id,
-    });
-    const final = makeMatch({
-      stage: "final",
-      order: 1,
-      teamAId: ranked[0].id,
-      teamBId: null,
-      status: "pending",
-    });
-    room.matches.push(pre, final);
-    room.stage = "pre_elim";
-    room.activeMatchId = pre.id;
-    addLog(
-      room,
-      `Liguilla cerrada. ${ranked[0].name} espera en la Final. Pre-elim: ${ranked[1].name} vs ${ranked[2].name}.`,
-    );
-    return;
-  }
-
-  const top = ranked.slice(0, 4);
-  for (const extra of ranked.slice(4)) {
-    extra.eliminatedIn = "classification";
-  }
-  const pre1 = makeMatch({
-    stage: "pre_elim",
-    order: 1,
-    teamAId: top[0].id,
-    teamBId: top[3].id,
-  });
-  const pre2 = makeMatch({
-    stage: "pre_elim",
-    order: 2,
-    teamAId: top[1].id,
-    teamBId: top[2].id,
-  });
-  const final = makeMatch({
-    stage: "final",
-    order: 1,
-    teamAId: null,
-    teamBId: null,
-    status: "pending",
-  });
-  room.matches.push(pre1, pre2, final);
-  room.stage = "pre_elim";
-  room.activeMatchId = pre1.id;
-  addLog(
-    room,
-    `Liguilla cerrada. Pre-elim justa: 1° vs 4° y 2° vs 3°. Los ganadores van a la Final.`,
+    `Primera mesa: ${queue[0] ? labelMatch(room, queue[0]) : "por definir"}. Quien gane espera en la Final; los demás pelean el otro cupo.`,
   );
 }
 
@@ -407,13 +439,7 @@ export function finishMatch(room: Room, match: Match, winnerId: string): void {
   );
 
   if (match.stage === "classification") {
-    const next = nextReady(room, "classification", match.order);
-    if (next) {
-      room.activeMatchId = next.id;
-      addLog(room, `Siguiente mesa: ${labelMatch(room, next)}.`);
-    } else {
-      seedPlayoffs(room);
-    }
+    continueAfterClassification(room, match);
     return;
   }
 

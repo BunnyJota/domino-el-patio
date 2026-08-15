@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MatchFX, { unlockAudio } from "@/components/MatchFX";
 import ScoreSheet from "@/components/ScoreSheet";
 import { RULES_TEXT, STAGE_LABEL } from "@/lib/rules";
 import { classificationStandings, teamById } from "@/lib/tournament";
@@ -310,14 +311,14 @@ export default function DominoApp() {
   }, [needsTeam, room, view]);
 
   return (
-    <div id="app">
+    <div id="app" onPointerDown={unlockAudio}>
       {view === "landing" && (
         <>
           <div className="hero">
             <img className="brand-logo" src="/logo.png" alt="Dominó El Patio" />
             <p className="sub">
-              Crea la sala, rifa las parejas y anota el torneo en vivo: todos contra todos,
-              pre-eliminatoria y final. Cada grupo apunta sus puntos; el dueño lo ve todo.
+              Crea la sala, rifa las parejas y anota el torneo en vivo. Quien gana espera
+              la final; los perdedores pelean el otro cupo. Cada grupo apunta sus puntos.
             </p>
           </div>
           {storage === "missing" && (
@@ -586,7 +587,7 @@ function Lobby({
         </div>
         <p className="muted" style={{ fontSize: 13 }}>
           {isAdmin
-            ? "Paso 2: rifa de equipos. Paso 3: todos se enfrentan, una mesa a la vez, luego pre-elim y final."
+            ? "Paso 2: rifa de equipos. Paso 3: primera mesa. Quien gane espera la final; los demás pelean el otro cupo."
             : "Estás en la sala. Cuando existan grupos, selecciona el tuyo para anotar puntos."}
         </p>
       </div>
@@ -677,7 +678,7 @@ function Lobby({
       )}
       {canStart && (
         <button className="btn btn-cyan btn-block" disabled={busy} onClick={onStart}>
-          ▶ Paso 3 · Comenzar (todos contra todos)
+          ▶ Paso 3 · Comenzar torneo
         </button>
       )}
       {isAdmin && (
@@ -717,15 +718,16 @@ function Play({
 }) {
   const tabs: Array<[Tab, string]> = [
     ["apunte", "Apunte"],
-    ["calendario", "Calendario"],
-    ["ranking", "Ranking"],
-    ["reglas", "Reglamento"],
-    ["historial", "Historial"],
+    ["calendario", "Mesas"],
+    ["ranking", "Tabla"],
+    ["reglas", "Reglas"],
+    ["historial", "Diario"],
   ];
   const champ = teamById(room, room.champion);
 
   return (
-    <div>
+    <div className={isAdmin ? "" : "player-play"}>
+      <MatchFX room={room} myTeamId={myTeamId} />
       <TopBar room={room} subtitle={STAGE_LABEL[room.stage] || room.name} onShare={onShare} />
       <div className="tabs" style={{ marginBottom: 18 }}>
         {tabs.map(([id, label]) => (
@@ -757,20 +759,7 @@ function Play({
       {tab === "calendario" && <Calendar room={room} />}
       {tab === "ranking" && <Ranking room={room} />}
       {tab === "reglas" && <Rules />}
-      {tab === "historial" && (
-        room.log.length === 0 ? (
-          <div className="empty-state"><div className="glyph">🁩</div><p>Aún no hay jugadas registradas.</p></div>
-        ) : (
-          <div className="card" style={{ padding: "6px 14px" }}>
-            {room.log.map((e) => (
-              <div className="log-entry" key={e.ts + e.text}>
-                <span className="log-time">{e.time}</span>
-                <span>{e.text}</span>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+      {tab === "historial" && <History room={room} />}
 
       {isAdmin && (
         <div className="row wrap" style={{ gap: 8, marginTop: 22 }}>
@@ -784,8 +773,8 @@ function Play({
 
 function Calendar({ room }: { room: Room }) {
   const stages: Array<[Match["stage"], string]> = [
-    ["classification", "1. Todos contra todos"],
-    ["pre_elim", "2. Pre-eliminatoria"],
+    ["classification", "1. Ronda inicial"],
+    ["pre_elim", "2. Repechaje de perdedores"],
     ["final", "3. Final"],
   ];
   return (
@@ -840,6 +829,57 @@ function MatchTile({ room, match, live }: { room: Room; match: Match; live: bool
         <span className="team-score">{teamB ? match.scoreB : ""}</span>
       </div>
       <div className="tile-status">{status}</div>
+      {match.restTeamId && teamById(room, match.restTeamId) && (
+        <div className="tile-status rest-pill" style={{ paddingTop: 0 }}>
+          Espera: {teamById(room, match.restTeamId)?.name}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function History({ room }: { room: Room }) {
+  const closed = room.matches
+    .filter((m) => m.status === "done" && m.teamAId && m.teamBId)
+    .sort((a, b) => b.order - a.order || b.stage.localeCompare(a.stage));
+  return (
+    <div className="stack">
+      {closed.length > 0 && (
+        <div className="stack" style={{ gap: 8 }}>
+          <p className="phase-title">Mesas cerradas</p>
+          {closed.map((m) => {
+            const a = teamById(room, m.teamAId);
+            const b = teamById(room, m.teamBId);
+            const aWin = m.winnerId === m.teamAId;
+            const bWin = m.winnerId === m.teamBId;
+            return (
+              <div className="history-card" key={m.id}>
+                <p className="eyebrow">{STAGE_LABEL[m.stage]} · Mesa {m.order}</p>
+                <div className="history-row">
+                  <span className={aWin ? "winner" : ""}>{aWin ? "♛ " : ""}{a?.name}</span>
+                  <strong>{m.scoreA}</strong>
+                </div>
+                <div className="history-row">
+                  <span className={bWin ? "winner" : ""}>{bWin ? "♛ " : ""}{b?.name}</span>
+                  <strong>{m.scoreB}</strong>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {room.log.length === 0 ? (
+        <div className="empty-state"><div className="glyph">🁩</div><p>Aún no hay jugadas registradas.</p></div>
+      ) : (
+        <div className="card" style={{ padding: "6px 14px" }}>
+          {room.log.map((e) => (
+            <div className="log-entry" key={e.ts + e.text}>
+              <span className="log-time">{e.time}</span>
+              <span>{e.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
