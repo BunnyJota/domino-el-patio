@@ -103,7 +103,14 @@ label.field-label {
 .hidden { display: none !important; }
 
 .hero { padding: 28px 4px 18px; text-align: center; }
-.brand-logo { width: min(320px, 86vw); height: auto; margin: 0 auto 8px; display: block; filter: drop-shadow(0 12px 28px rgba(0,0,0,.45)); }
+.brand-logo { width: min(380px, 92vw); height: auto; margin: 0 auto 8px; display: block; filter: drop-shadow(0 12px 28px rgba(0,0,0,.45)); }
+.storage-alert {
+  max-width: 460px; margin: 8px auto 0; padding: 12px 14px;
+  background: rgba(210, 30, 50, 0.16); border: 1px solid rgba(210, 30, 50, 0.4);
+  color: var(--red-soft); border-radius: 14px; font-size: 13.5px; text-align: left; line-height: 1.45;
+}
+.storage-alert strong { display: block; margin-bottom: 4px; color: #ffd0d3; }
+.storage-alert code { font-family: var(--font-mono); font-size: 12px; color: var(--gold-soft); }
 .hero .sub { margin-top: 8px; color: var(--cream-dim); font-size: 16px; max-width: 460px; margin-left: auto; margin-right: auto; }
 .landing-actions { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin: 26px auto 0; }
 .divider-word {
@@ -204,3 +211,60 @@ footer.mode-tag { text-align: center; margin-top: 26px; font-size: 12px; color: 
 .rest-pill { font-size: 12px; color: var(--cyan-soft); }
 
 details.card summary { cursor: pointer; font-weight: 700; font-size: 13.5px; color: var(--cream-dim); }
+
+.sheet {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  background: var(--tile);
+  color: var(--ink);
+  border-radius: var(--radius-tile);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+.sheet-col {
+  padding: 12px 10px 14px;
+  min-width: 0;
+}
+.sheet-col + .sheet-col { border-left: 1px solid rgba(20, 35, 27, 0.16); }
+.sheet-name {
+  font-weight: 800;
+  font-size: 13px;
+  text-align: center;
+  min-height: 36px;
+  line-height: 1.25;
+}
+.sheet-name.mine { color: #0b3f22; }
+.sheet-lines {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  min-height: 120px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+}
+.sheet-lines li {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 4px;
+  border-bottom: 1px dashed rgba(20, 35, 27, 0.14);
+}
+.sheet-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 22px;
+}
+.sheet-add { margin-top: 10px; display: flex; gap: 6px; }
+.sheet-add input[type=number] {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid rgba(20, 35, 27, 0.2);
+  padding: 9px 10px;
+}
+.sheet-add .btn { padding: 9px 12px; font-size: 13px; }

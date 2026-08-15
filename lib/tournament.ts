@@ -464,8 +464,10 @@ export function addPoints(
     time: nowStr(),
     text,
     byMemberId,
+    side,
+    delta,
   };
-  match.log.unshift(entry);
+  match.log.push(entry);
   addLog(room, text, byMemberId);
 }
 
@@ -522,15 +524,26 @@ export function maybeAutoFinish(room: Room, match: Match): boolean {
 }
 
 export function canScoreMatch(
-  room: Room,
+  _room: Room,
   match: Match,
   ctx: { isAdmin: boolean; teamId?: string | null },
 ): boolean {
   if (match.status === "done" || match.status === "pending") return false;
-  if (room.activeMatchId !== match.id) return false;
+  if (!match.teamAId || !match.teamBId) return false;
   if (ctx.isAdmin) return true;
   if (!ctx.teamId) return false;
   return ctx.teamId === match.teamAId || ctx.teamId === match.teamBId;
+}
+
+export function canScoreSide(
+  room: Room,
+  match: Match,
+  ctx: { isAdmin: boolean; teamId?: string | null },
+  side: "A" | "B",
+): boolean {
+  if (!canScoreMatch(room, match, ctx)) return false;
+  if (ctx.isAdmin) return true;
+  return sideForTeam(match, ctx.teamId || null) === side;
 }
 
 export function sideForTeam(match: Match, teamId: string | null): "A" | "B" | null {

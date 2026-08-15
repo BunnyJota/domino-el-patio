@@ -25,6 +25,7 @@ export const metadata: Metadata = {
   description:
     "Anota el torneo de dominó en sala: rifa de parejas, todos contra todos, pre-eliminatoria y final.",
   applicationName: "Dominó El Patio",
+  icons: { icon: "/logo.png", apple: "/logo.png" },
   appleWebApp: { capable: true, title: "El Patio", statusBarStyle: "black-translucent" },
 };
 
