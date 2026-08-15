@@ -65,4 +65,4 @@ Ver `.env.example`. No subas `.env` al repo.
 
 ## Logo
 
-El archivo `public/logo.svg` es la marca Dominó El Patio. Si quieres usar el PNG original, colócalo en `public/logo.png` y cambia el `src` del logo en `components/DominoApp.tsx`.
+El archivo `public/logo.png` es la marca Dominó El Patio.

@@ -35,6 +35,8 @@ export interface LogEntry {
   time: string;
   text: string;
   byMemberId?: string;
+  side?: "A" | "B";
+  delta?: number;
 }
 
 export interface Match {

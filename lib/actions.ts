@@ -161,7 +161,10 @@ export function applyAction(
         throw new Error("Solo puedes anotar los puntos de tu grupo.");
       }
       const delta = Number(payload.delta);
-      if (!delta) throw new Error("Ingresa los puntos de la mano.");
+      if (!delta || Number.isNaN(delta)) throw new Error("Ingresa los puntos.");
+      if (!ctx.isAdmin && delta < 0) {
+        throw new Error("Solo el dueño puede restar puntos.");
+      }
       addPoints(
         room,
         match,

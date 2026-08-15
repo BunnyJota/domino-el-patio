@@ -1,19 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ScoreSheet from "@/components/ScoreSheet";
 import { RULES_TEXT, STAGE_LABEL } from "@/lib/rules";
-import {
-  activeMatch,
-  canScoreMatch,
-  classificationStandings,
-  labelMatch,
-  sideForTeam,
-  teamById,
-} from "@/lib/tournament";
+import { classificationStandings, teamById } from "@/lib/tournament";
 import type { ActionName, ActionPayload, Match, Room, RoomMode } from "@/lib/types";
 
 const SESSION_KEY = "elpatio-session";
-const CHIPS = [5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80];
 
 type View = "landing" | "create" | "join" | "lobby" | "pick" | "play";
 type Tab = "apunte" | "calendario" | "ranking" | "reglas" | "historial";
@@ -61,12 +54,7 @@ export default function DominoApp() {
   const [addA, setAddA] = useState("");
   const [addB, setAddB] = useState("");
   const [addTeam, setAddTeam] = useState("");
-  const [handSide, setHandSide] = useState<"A" | "B">("A");
-  const [handFichas, setHandFichas] = useState<number | null>(null);
-  const [handCustom, setHandCustom] = useState("");
-  const [pacho, setPacho] = useState(false);
-  const [pase, setPase] = useState(false);
-  const [manualPts, setManualPts] = useState("");
+  const [storage, setStorage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -130,6 +118,17 @@ export default function DominoApp() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/rooms", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.storage === "string") setStorage(data.storage);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }, []);
+
+  useEffect(() => {
     const existing = loadSession();
     if (!existing?.roomCode) return;
     refresh(existing.roomCode, existing.adminCode)
@@ -168,16 +167,6 @@ export default function DominoApp() {
     [room, session?.memberId],
   );
   const myTeamId = member?.teamId || null;
-  const match = room ? activeMatch(room) : null;
-  const canScore = room && match
-    ? canScoreMatch(room, match, { isAdmin: Boolean(session?.isAdmin), teamId: myTeamId })
-    : false;
-
-  useEffect(() => {
-    if (!match) return;
-    const locked = sideForTeam(match, myTeamId);
-    if (locked) setHandSide(locked);
-  }, [match, myTeamId]);
 
   async function createSala() {
     setBusy(true);
@@ -282,31 +271,6 @@ export default function DominoApp() {
     }
   }
 
-  async function recordHand() {
-    if (!match || !room) return;
-    const customVal = parseInt(handCustom, 10);
-    const fichas = !Number.isNaN(customVal) ? customVal : handFichas || 0;
-    const total = fichas + (pacho ? 30 : 0) + (pase ? 30 : 0);
-    if (total <= 0) {
-      showToast("Ingresa los puntos de la mano.");
-      return;
-    }
-    const label = `Mano: ${fichas} pts de fichas${pacho ? " + Pacho" : ""}${pase ? " + Pase" : ""}`;
-    const next = await run("addPoints", {
-      matchId: match.id,
-      side: handSide,
-      delta: total,
-      label,
-    });
-    if (next) {
-      setHandFichas(null);
-      setHandCustom("");
-      setPacho(false);
-      setPase(false);
-      showToast("Apunte registrado.");
-    }
-  }
-
   function shareCode() {
     if (!room) return;
     const text = `Únete a Dominó El Patio "${room.name}" con el código: ${room.code}`;
@@ -350,12 +314,19 @@ export default function DominoApp() {
       {view === "landing" && (
         <>
           <div className="hero">
-            <img className="brand-logo" src="/logo.svg" alt="Dominó El Patio" />
+            <img className="brand-logo" src="/logo.png" alt="Dominó El Patio" />
             <p className="sub">
               Crea la sala, rifa las parejas y anota el torneo en vivo: todos contra todos,
               pre-eliminatoria y final. Cada grupo apunta sus puntos; el dueño lo ve todo.
             </p>
           </div>
+          {storage === "missing" && (
+            <div className="storage-alert" role="alert">
+              <strong>Falta la base de datos en Vercel.</strong>
+              En el proyecto: Settings → Environment Variables, agrega{" "}
+              <code>DATABASE_URL</code> de Neon (Integrations → Neon) y vuelve a desplegar.
+            </div>
+          )}
           <div className="landing-actions">
             <button className="btn btn-primary btn-block" onClick={() => setView("create")}>
               Crear torneo
@@ -512,36 +483,14 @@ export default function DominoApp() {
           setTab={setTab}
           isAdmin={session.isAdmin}
           myTeamId={myTeamId}
-          match={match}
-          canScore={Boolean(canScore)}
           busy={busy}
-          handSide={handSide}
-          setHandSide={setHandSide}
-          handFichas={handFichas}
-          setHandFichas={setHandFichas}
-          handCustom={handCustom}
-          setHandCustom={setHandCustom}
-          pacho={pacho}
-          setPacho={setPacho}
-          pase={pase}
-          setPase={setPase}
-          manualPts={manualPts}
-          setManualPts={setManualPts}
           onShare={shareCode}
-          onRecordHand={recordHand}
-          onFault={(side, level) => run("applyFault", { matchId: match?.id, side, level })}
-          onManual={async () => {
-            const delta = parseInt(manualPts, 10);
-            if (!delta) return;
-            const ok = await run("addPoints", {
-              matchId: match?.id,
-              side: handSide,
-              delta,
-              label: "Manual",
-            });
-            if (ok) setManualPts("");
+          onAddPoints={async (matchId, side, delta) => {
+            const ok = await run("addPoints", { matchId, side, delta, label: "Apunte" });
+            if (ok) showToast("Puntos anotados.");
+            return Boolean(ok);
           }}
-          onDeclare={(winnerId) => run("declareWinner", { matchId: match?.id, winnerId })}
+          onDeclare={(matchId, winnerId) => run("declareWinner", { matchId, winnerId })}
           onReset={async () => {
             if (!confirm("Esto borra la llave y vuelve a la sala. ¿Continuar?")) return;
             const next = await run("reset");
@@ -747,25 +696,9 @@ function Play({
   setTab,
   isAdmin,
   myTeamId,
-  match,
-  canScore,
   busy,
-  handSide,
-  setHandSide,
-  handFichas,
-  setHandFichas,
-  handCustom,
-  setHandCustom,
-  pacho,
-  setPacho,
-  pase,
-  setPase,
-  manualPts,
-  setManualPts,
   onShare,
-  onRecordHand,
-  onFault,
-  onManual,
+  onAddPoints,
   onDeclare,
   onReset,
   onBack,
@@ -775,26 +708,10 @@ function Play({
   setTab: (t: Tab) => void;
   isAdmin: boolean;
   myTeamId: string | null;
-  match: Match | null;
-  canScore: boolean;
   busy: boolean;
-  handSide: "A" | "B";
-  setHandSide: (s: "A" | "B") => void;
-  handFichas: number | null;
-  setHandFichas: (n: number | null) => void;
-  handCustom: string;
-  setHandCustom: (s: string) => void;
-  pacho: boolean;
-  setPacho: (v: boolean) => void;
-  pase: boolean;
-  setPase: (v: boolean) => void;
-  manualPts: string;
-  setManualPts: (s: string) => void;
   onShare: () => void;
-  onRecordHand: () => void;
-  onFault: (side: "A" | "B", level: "leve" | "grave") => void;
-  onManual: () => void;
-  onDeclare: (winnerId: string) => void;
+  onAddPoints: (matchId: string, side: "A" | "B", delta: number) => Promise<boolean>;
+  onDeclare: (matchId: string, winnerId: string) => void;
   onReset: () => void;
   onBack: () => void;
 }) {
@@ -806,7 +723,6 @@ function Play({
     ["historial", "Historial"],
   ];
   const champ = teamById(room, room.champion);
-  const locked = match ? sideForTeam(match, myTeamId) : null;
 
   return (
     <div>
@@ -827,39 +743,14 @@ function Play({
               <h2 style={{ fontSize: 28, color: "var(--gold-soft)" }}>🏆 {champ.name}</h2>
             </div>
           )}
-          {!match && !room.champion && (
-            <div className="empty-state">
-              <div className="glyph">🁠</div>
-              <p>Todavía no hay mesa activa.</p>
-            </div>
-          )}
-          {match && (
-            <Scoreboard
-              room={room}
-              match={match}
-              myTeamId={myTeamId}
-              canScore={canScore}
-              isAdmin={isAdmin}
-              busy={busy}
-              handSide={handSide}
-              setHandSide={setHandSide}
-              locked={locked}
-              handFichas={handFichas}
-              setHandFichas={setHandFichas}
-              handCustom={handCustom}
-              setHandCustom={setHandCustom}
-              pacho={pacho}
-              setPacho={setPacho}
-              pase={pase}
-              setPase={setPase}
-              manualPts={manualPts}
-              setManualPts={setManualPts}
-              onRecordHand={onRecordHand}
-              onFault={onFault}
-              onManual={onManual}
-              onDeclare={onDeclare}
-            />
-          )}
+          <ScoreSheet
+            room={room}
+            isAdmin={isAdmin}
+            myTeamId={myTeamId}
+            busy={busy}
+            onAddPoints={onAddPoints}
+            onDeclare={onDeclare}
+          />
         </div>
       )}
 
@@ -888,187 +779,6 @@ function Play({
         </div>
       )}
     </div>
-  );
-}
-
-function Scoreboard({
-  room,
-  match,
-  myTeamId,
-  canScore,
-  isAdmin,
-  busy,
-  handSide,
-  setHandSide,
-  locked,
-  handFichas,
-  setHandFichas,
-  handCustom,
-  setHandCustom,
-  pacho,
-  setPacho,
-  pase,
-  setPase,
-  manualPts,
-  setManualPts,
-  onRecordHand,
-  onFault,
-  onManual,
-  onDeclare,
-}: {
-  room: Room;
-  match: Match;
-  myTeamId: string | null;
-  canScore: boolean;
-  isAdmin: boolean;
-  busy: boolean;
-  handSide: "A" | "B";
-  setHandSide: (s: "A" | "B") => void;
-  locked: "A" | "B" | null;
-  handFichas: number | null;
-  setHandFichas: (n: number | null) => void;
-  handCustom: string;
-  setHandCustom: (s: string) => void;
-  pacho: boolean;
-  setPacho: (v: boolean) => void;
-  pase: boolean;
-  setPase: (v: boolean) => void;
-  manualPts: string;
-  setManualPts: (s: string) => void;
-  onRecordHand: () => void;
-  onFault: (side: "A" | "B", level: "leve" | "grave") => void;
-  onManual: () => void;
-  onDeclare: (winnerId: string) => void;
-}) {
-  const teamA = teamById(room, match.teamAId);
-  const teamB = teamById(room, match.teamBId);
-  const rest = teamById(room, match.restTeamId);
-  const next = room.matches
-    .filter((m) => m.stage === match.stage && m.status !== "done" && m.id !== match.id)
-    .sort((a, b) => a.order - b.order)[0];
-  const membersA = room.members.filter((m) => m.teamId === match.teamAId);
-  const membersB = room.members.filter((m) => m.teamId === match.teamBId);
-
-  return (
-    <>
-      <div className="card stack">
-        <div className="row between wrap">
-          <p className="eyebrow">{STAGE_LABEL[match.stage]} · Mesa {match.order}</p>
-          <span className="badge badge-alive">Meta {room.target}</span>
-        </div>
-        <div className={`tile-card live`}>
-          <div className="tile-half">
-            <span className={`team-name ${myTeamId === match.teamAId ? "mine" : ""}`}>{teamA?.name || "Por definir"}</span>
-            <span className="team-score apunte-score">{teamA ? match.scoreA : ""}</span>
-          </div>
-          <div className="tile-mid" />
-          <div className="tile-half">
-            <span className={`team-name ${myTeamId === match.teamBId ? "mine" : ""}`}>{teamB?.name || "Por definir"}</span>
-            <span className="team-score apunte-score">{teamB ? match.scoreB : ""}</span>
-          </div>
-          <div className="tile-status">En mesa ahora · {labelMatch(room, match)}</div>
-        </div>
-        {isAdmin && (
-          <p className="muted" style={{ fontSize: 12.5 }}>
-            Dueño: ves los apuntes de ambos grupos.
-            {membersA.length + membersB.length > 0
-              ? ` Anotan: ${[...membersA, ...membersB].map((m) => m.nickname).join(", ")}.`
-              : " Aún nadie de estos grupos ha entrado a anotar."}
-          </p>
-        )}
-        {rest && <p className="rest-pill">Descansa esta ronda: {rest.name}</p>}
-        {next && <p className="muted" style={{ fontSize: 13 }}>Siguiente: {labelMatch(room, next)}</p>}
-      </div>
-
-      {canScore && teamA && teamB && (
-        <div className="card stack" style={{ background: "var(--surface-2)", borderColor: "var(--line-strong)" }}>
-          <p className="eyebrow">Anotar mano</p>
-          <p className="muted" style={{ fontSize: 12.5 }}>
-            Suma las fichas que le quedaron al que perdió la mano. Esos puntos van al que la ganó.
-            {locked && !isAdmin ? " Solo puedes cargar los puntos de tu grupo." : ""}
-          </p>
-          <div>
-            <label className="field-label">¿Quién ganó esta mano?</label>
-            <div className="row" style={{ gap: 8 }}>
-              {(["A", "B"] as const).map((side) => (
-                <button
-                  key={side}
-                  className={`btn btn-sm ${handSide === side ? "btn-primary" : "btn-ghost"}`}
-                  style={{ flex: 1 }}
-                  disabled={Boolean(locked && !isAdmin && locked !== side)}
-                  onClick={() => setHandSide(side)}
-                >
-                  {side === "A" ? teamA.name : teamB.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="field-label">Puntos de fichas del que perdió</label>
-            <div className="quick-grid three" style={{ marginBottom: 8 }}>
-              {CHIPS.map((c) => (
-                <button key={c} className={`qbtn ${handFichas === c ? "qbtn-gold" : ""}`} onClick={() => setHandFichas(c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
-            <input type="number" min={0} placeholder="Otro total (ej. 47)" value={handCustom} onChange={(e) => setHandCustom(e.target.value)} />
-          </div>
-          <div className="row wrap" style={{ gap: 16 }}>
-            <label className="row" style={{ gap: 7, fontSize: 13.5 }}>
-              <input type="checkbox" checked={pacho} onChange={(e) => setPacho(e.target.checked)} /> Fue Pacho <span className="muted">(+30)</span>
-            </label>
-            <label className="row" style={{ gap: 7, fontSize: 13.5 }}>
-              <input type="checkbox" checked={pase} onChange={(e) => setPase(e.target.checked)} /> Hubo pase <span className="muted">(+30)</span>
-            </label>
-          </div>
-          <button className="btn btn-primary btn-block" disabled={busy} onClick={onRecordHand}>
-            Registrar mano
-          </button>
-        </div>
-      )}
-
-      {isAdmin && teamA && teamB && (
-        <details className="card">
-          <summary>Faltas y correcciones (solo dueño)</summary>
-          <div className="stack" style={{ marginTop: 14 }}>
-            <div className="row" style={{ gap: 14 }}>
-              {(["A", "B"] as const).map((side) => (
-                <div className="stack" style={{ flex: 1, gap: 8 }} key={side}>
-                  <p className="eyebrow center">{side === "A" ? teamA.name : teamB.name}</p>
-                  <button className="qbtn qbtn-red" onClick={() => onFault(side, "leve")}>Falta leve</button>
-                  <button className="qbtn qbtn-red" onClick={() => onFault(side, "grave")}>Falta grave (+30 rival)</button>
-                </div>
-              ))}
-            </div>
-            <div className="row" style={{ gap: 10 }}>
-              <input type="number" placeholder="Puntos manuales (+/-)" value={manualPts} onChange={(e) => setManualPts(e.target.value)} />
-              <button className="btn btn-ghost btn-sm" onClick={onManual}>Añadir</button>
-            </div>
-            <button
-              className="btn btn-outline btn-block"
-              onClick={() => {
-                if (!match.teamAId || !match.teamBId) return;
-                const lead = match.scoreA >= match.scoreB ? match.teamAId : match.teamBId;
-                const leadName = match.scoreA >= match.scoreB ? teamA.name : teamB.name;
-                const pick = confirm(`¿Declarar ganador a ${leadName}? Cancelar para elegir el otro.`);
-                onDeclare(pick ? lead : lead === match.teamAId ? match.teamBId : match.teamAId);
-              }}
-            >
-              Declarar ganador de la partida ahora
-            </button>
-          </div>
-        </details>
-      )}
-
-      {!canScore && !isAdmin && (
-        <p className="muted center" style={{ fontSize: 13 }}>
-          {myTeamId && (myTeamId === match.teamAId || myTeamId === match.teamBId)
-            ? "Espera tu turno en mesa para anotar."
-            : "Solo el grupo que está en mesa (o el dueño) puede anotar."}
-        </p>
-      )}
-    </>
   );
 }
 
